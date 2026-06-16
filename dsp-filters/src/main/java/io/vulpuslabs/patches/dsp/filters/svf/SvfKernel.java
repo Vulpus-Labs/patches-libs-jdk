@@ -1,7 +1,6 @@
 package io.vulpuslabs.patches.dsp.filters.svf;
 
 import io.vulpuslabs.patches.dsp.core.CoefRamp;
-import io.vulpuslabs.patches.dsp.core.DspMath;
 
 /**
  * Single-voice Chamberlin SVF kernel with per-sample coefficient interpolation.
@@ -21,7 +20,11 @@ import io.vulpuslabs.patches.dsp.core.DspMath;
  * <p>{@link #tick(float)} returns the sample's outputs as a {@link FilterOutputs}
  * record. On the audio hot path that record is a transient the JIT scalar-replaces
  * (escape analysis), so the kernel keeps its state private without a per-sample
- * heap allocation. The returned values are the sanitised integrator state.
+ * heap allocation.
+ *
+ * <p>No NaN/Inf sanitisation: Voltage Modular runs with denormals flushed to zero
+ * at the CPU level, and {@link SvfCoeffs}'s stability clamp keeps the recurrence
+ * bounded, so the inner loop is a branch-free FMA chain.
  */
 public final class SvfKernel {
 
@@ -86,11 +89,13 @@ public final class SvfKernel {
             float f = active[F];
             float q = active[Q];
 
-            lpState = DspMath.sanitize(lpState + f * bpState);
-            float hp = x - lpState - q * bpState;
-            bpState = DspMath.sanitize(bpState + f * hp);
+            float lp = lpState + f * bpState;
+            float hp = x - lp - q * bpState;
+            float bp = bpState + f * hp;
+            lpState = lp;
+            bpState = bp;
 
-            return new FilterOutputs(lpState, hp, bpState);
+            return new FilterOutputs(lp, hp, bp);
         });
     }
 }
