@@ -89,13 +89,11 @@ public final class SvfKernel {
             float f = active[F];
             float q = active[Q];
 
-            float lp = lpState + f * bpState;
-            float hp = x - lp - q * bpState;
-            float bp = bpState + f * hp;
-            lpState = lp;
-            bpState = bp;
+            lpState += f * bpState;
+            float hp = x - lpState - q * bpState;
+            bpState += f * hp;
 
-            return new FilterOutputs(lp, hp, bp);
+            return new FilterOutputs(lpState, hp, bpState);
         });
     }
 }

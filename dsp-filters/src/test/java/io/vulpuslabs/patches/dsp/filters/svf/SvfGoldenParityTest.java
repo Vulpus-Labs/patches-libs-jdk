@@ -6,7 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.vulpuslabs.patches.dsp.core.DspMath;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -110,12 +113,30 @@ class SvfGoldenParityTest {
     }
 
     private static String readResource(String path) {
+        // Classpath lookup — succeeds under Gradle (build/resources/test).
         try (InputStream in = SvfGoldenParityTest.class.getResourceAsStream(path)) {
-            assertNotNull(in, "missing resource " + path);
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            if (in != null) {
+                return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        // Fallback for IDE test runners that compile to their own output dir and
+        // don't copy src/test/resources onto the classpath: walk up from the
+        // compiled-class location to the module root and read the file directly.
+        try {
+            Path from = Path.of(SvfGoldenParityTest.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI());
+            for (Path dir = from; dir != null; dir = dir.getParent()) {
+                Path candidate = dir.resolve("src/test/resources" + path);
+                if (Files.exists(candidate)) {
+                    return Files.readString(candidate, StandardCharsets.UTF_8);
+                }
+            }
+        } catch (URISyntaxException | IOException e) {
+            throw new RuntimeException(e);
+        }
+        throw new IllegalStateException("missing resource " + path);
     }
 
     private static final class Scenario {
