@@ -16,10 +16,9 @@ class SvfStabilityTest {
         float qNorm = 0.83f; // damping ≈ 0.1, Q ≈ 10
         SvfKernel kernel = new SvfKernel(SvfCoeffs.of(1_000.0f, SAMPLE_RATE, qNorm));
         for (int i = 0; i < 10_000; i++) {
-            final int idx = i;
-            kernel.tick(i == 0 ? 1.0f : 0.0f, (lp, hp, bp) ->
-                    assertTrue(Math.abs(lp) < 100.0f && Math.abs(hp) < 100.0f && Math.abs(bp) < 100.0f,
-                            "sample " + idx + ": unbounded lp=" + lp + " hp=" + hp + " bp=" + bp));
+            FilterOutputs o = kernel.tick(i == 0 ? 1.0f : 0.0f);
+            assertTrue(Math.abs(o.lp()) < 100.0f && Math.abs(o.hp()) < 100.0f && Math.abs(o.bp()) < 100.0f,
+                    "sample " + i + ": unbounded lp=" + o.lp() + " hp=" + o.hp() + " bp=" + o.bp());
         }
     }
 
@@ -44,13 +43,11 @@ class SvfStabilityTest {
                 kernel.beginRamp(SvfCoeffs.of(fc, SAMPLE_RATE, qNorm));
             }
             float x = (n < 64) ? 0.5f : 0.0f;
-            final int idx = n;
-            kernel.tick(x, (lp, hp, bp) -> {
-                assertTrue(Float.isFinite(lp) && Float.isFinite(hp) && Float.isFinite(bp),
-                        "sample " + idx + ": NaN/Inf");
-                assertTrue(Math.abs(lp) < 1e6f && Math.abs(hp) < 1e6f && Math.abs(bp) < 1e6f,
-                        "sample " + idx + ": runaway");
-            });
+            FilterOutputs o = kernel.tick(x);
+            assertTrue(Float.isFinite(o.lp()) && Float.isFinite(o.hp()) && Float.isFinite(o.bp()),
+                    "sample " + n + ": NaN/Inf");
+            assertTrue(Math.abs(o.lp()) < 1e6f && Math.abs(o.hp()) < 1e6f && Math.abs(o.bp()) < 1e6f,
+                    "sample " + n + ": runaway");
         }
     }
 
@@ -59,20 +56,19 @@ class SvfStabilityTest {
         SvfCoeffs c = SvfCoeffs.of(1_000.0f, SAMPLE_RATE, 0.5f);
         float f = c.f();
         SvfKernel kernel = new SvfKernel(c);
-        float[] lastLp = {0.0f};
+        float lastLp = 0.0f;
         for (int i = 0; i < 100; i++) {
-            kernel.tick(0.5f, (lp, hp, bp) -> lastLp[0] = lp);
+            lastLp = kernel.tick(0.5f).lp();
         }
         // State accumulated under DC drive, so the output is non-zero.
-        assertNotEquals(0.0f, lastLp[0]);
+        assertNotEquals(0.0f, lastLp);
         kernel.resetState();
 
         // After reset: lp = 0 + f*0 = 0; hp = x - 0 - d*0 = x; bp = 0 + f*x.
         float x = 1.0f;
-        kernel.tick(x, (lp, hp, bp) -> {
-            assertEquals(0.0f, lp, 1e-9f);
-            assertEquals(x, hp, 1e-9f);
-            assertEquals(f * x, bp, 1e-9f);
-        });
+        FilterOutputs o = kernel.tick(x);
+        assertEquals(0.0f, o.lp(), 1e-9f);
+        assertEquals(x, o.hp(), 1e-9f);
+        assertEquals(f * x, o.bp(), 1e-9f);
     }
 }

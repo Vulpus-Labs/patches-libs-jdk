@@ -18,11 +18,10 @@ import io.vulpuslabs.patches.dsp.core.DspMath;
  * <p>Coefficients are supplied as {@link SvfCoeffs} values, which are already
  * stability-clamped by construction and write themselves into the ramp buffer.
  *
- * <p>{@link #tick(float, SvfSink)} passes its three outputs to a {@link SvfSink}
- * rather than returning or publishing them, so the audio path is allocation-free
- * and the kernel keeps its state private. The {@code lp}/{@code bp} handed to the
- * sink are the pre-sanitise values (matching the Rust kernel's return), while the
- * stored integrator state is the sanitised value.
+ * <p>{@link #tick(float)} returns the sample's outputs as a {@link FilterOutputs}
+ * record. On the audio hot path that record is a transient the JIT scalar-replaces
+ * (escape analysis), so the kernel keeps its state private without a per-sample
+ * heap allocation. The returned values are the sanitised integrator state.
  */
 public final class SvfKernel {
 
@@ -80,10 +79,10 @@ public final class SvfKernel {
 
     /**
      * Run one Chamberlin SVF sample, advance the interpolating coefficients, and
-     * hand the lowpass/highpass/bandpass outputs to {@code sink}.
+     * return the lowpass/highpass/bandpass outputs.
      */
-    public void tick(float x, SvfSink sink) {
-        coefs.advance(active -> {
+    public FilterOutputs tick(float x) {
+        return coefs.advance(active -> {
             float f = active[F];
             float q = active[Q];
 
@@ -91,7 +90,7 @@ public final class SvfKernel {
             float hp = x - lpState - q * bpState;
             bpState = DspMath.sanitize(bpState + f * hp);
 
-            sink.accept(lpState, hp, bpState);
+            return new FilterOutputs(lpState, hp, bpState);
         });
     }
 }

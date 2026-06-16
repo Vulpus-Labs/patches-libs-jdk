@@ -48,8 +48,7 @@ class SvfFrequencyResponseTest {
         int fftSize = 1024;
         float[] ir = new float[fftSize];
         for (int i = 0; i < fftSize; i++) {
-            final int bin = i;
-            kernel.tick(i == 0 ? 1.0f : 0.0f, (lp, hp, bp) -> ir[bin] = lp);
+            ir[i] = kernel.tick(i == 0 ? 1.0f : 0.0f).lp();
         }
         double[] resp = magnitudeResponseDb(ir, fftSize);
 
@@ -69,8 +68,7 @@ class SvfFrequencyResponseTest {
         int fftSize = 1024;
         float[] ir = new float[fftSize];
         for (int i = 0; i < fftSize; i++) {
-            final int bin = i;
-            kernel.tick(i == 0 ? 1.0f : 0.0f, (lp, hp, bp) -> ir[bin] = hp);
+            ir[i] = kernel.tick(i == 0 ? 1.0f : 0.0f).hp();
         }
         double[] resp = magnitudeResponseDb(ir, fftSize);
 
@@ -90,8 +88,7 @@ class SvfFrequencyResponseTest {
         int fftSize = 1024;
         float[] ir = new float[fftSize];
         for (int i = 0; i < fftSize; i++) {
-            final int bin = i;
-            kernel.tick(i == 0 ? 1.0f : 0.0f, (lp, hp, bp) -> ir[bin] = bp);
+            ir[i] = kernel.tick(i == 0 ? 1.0f : 0.0f).bp();
         }
         double[] resp = magnitudeResponseDb(ir, fftSize);
 

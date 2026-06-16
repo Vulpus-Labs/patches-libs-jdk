@@ -39,10 +39,9 @@ class SvfQualityTest {
             refLp = lpNew;
             refBp = bpNew;
 
-            float[] lp = {0.0f};
-            kernel.tick(x32, (l, h, b) -> lp[0] = l);
+            float lp = kernel.tick(x32).lp();
             sumSqSignal += refLp * refLp;
-            double err = lp[0] - refLp;
+            double err = lp - refLp;
             sumSqError += err * err;
         }
 
@@ -87,23 +86,17 @@ class SvfQualityTest {
             refLp = refLpNew;
             refBp = refBpNew;
 
-            final float eLp = refLp;
-            final float eHp = refHp;
-            final float eBp = refBp;
-            final int idx = i;
-            k.tick(x, (lp, hp, bp) -> {
-                assertEquals(eLp, lp, 1e-6f, "lp[" + idx + "]");
-                assertEquals(eHp, hp, 1e-6f, "hp[" + idx + "]");
-                assertEquals(eBp, bp, 1e-6f, "bp[" + idx + "]");
-            });
+            FilterOutputs o = k.tick(x);
+            assertEquals(refLp, o.lp(), 1e-6f, "lp[" + i + "]");
+            assertEquals(refHp, o.hp(), 1e-6f, "hp[" + i + "]");
+            assertEquals(refBp, o.bp(), 1e-6f, "bp[" + i + "]");
         }
     }
 
     private static float[] run(SvfKernel k, float[] input) {
         float[] out = new float[input.length];
         for (int i = 0; i < input.length; i++) {
-            final int idx = i;
-            k.tick(input[i], (lp, hp, bp) -> out[idx] = lp);
+            out[i] = k.tick(input[i]).lp();
         }
         return out;
     }

@@ -27,10 +27,9 @@ class SvfImpulseTest {
             refLp = refLpNew;
             refBp = refBpNew;
 
-            final float expected = refLp;
-            final int idx = i;
-            kernel.tick(x, (lp, hp, bp) -> assertTrue(Math.abs(lp - expected) < 1e-9f,
-                    "sample " + idx + ": lp=" + lp + " ref=" + expected));
+            FilterOutputs o = kernel.tick(x);
+            assertTrue(Math.abs(o.lp() - refLp) < 1e-9f,
+                    "sample " + i + ": lp=" + o.lp() + " ref=" + refLp);
         }
     }
 }

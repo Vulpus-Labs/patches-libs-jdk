@@ -66,26 +66,24 @@ class SvfGoldenParityTest {
                 float fc = DspMath.clamp((float) (c0 * Math.pow(2.0, baseVoct + env)), 1.0f, SR * 0.499f);
                 k.beginRamp(SvfCoeffs.of(fc, SR, qNorm));
             }
-            final int idx = n;
-            k.tick(s.x[n], (lp, hp, bp) -> assertClose(s, idx, lp, hp, bp));
+            assertClose(s, n, k.tick(s.x[n]));
         }
     }
 
     private void replayStatic(Scenario s) {
         SvfKernel k = new SvfKernel(new SvfCoeffs(s.f, s.d));
         for (int n = 0; n < s.x.length; n++) {
-            final int idx = n;
-            k.tick(s.x[n], (lp, hp, bp) -> assertClose(s, idx, lp, hp, bp));
+            assertClose(s, n, k.tick(s.x[n]));
         }
     }
 
-    private void assertClose(Scenario s, int n, float lp, float hp, float bp) {
-        assertTrue(Math.abs(lp - s.lp[n]) < TOL,
-                s.name + " lp[" + n + "]: " + lp + " vs " + s.lp[n]);
-        assertTrue(Math.abs(hp - s.hp[n]) < TOL,
-                s.name + " hp[" + n + "]: " + hp + " vs " + s.hp[n]);
-        assertTrue(Math.abs(bp - s.bp[n]) < TOL,
-                s.name + " bp[" + n + "]: " + bp + " vs " + s.bp[n]);
+    private void assertClose(Scenario s, int n, FilterOutputs o) {
+        assertTrue(Math.abs(o.lp() - s.lp[n]) < TOL,
+                s.name + " lp[" + n + "]: " + o.lp() + " vs " + s.lp[n]);
+        assertTrue(Math.abs(o.hp() - s.hp[n]) < TOL,
+                s.name + " hp[" + n + "]: " + o.hp() + " vs " + s.hp[n]);
+        assertTrue(Math.abs(o.bp() - s.bp[n]) < TOL,
+                s.name + " bp[" + n + "]: " + o.bp() + " vs " + s.bp[n]);
     }
 
     // ── Minimal golden-JSON loader ────────────────────────────────────────

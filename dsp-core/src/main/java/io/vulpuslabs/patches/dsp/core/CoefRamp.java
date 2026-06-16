@@ -1,7 +1,8 @@
 package io.vulpuslabs.patches.dsp.core;
 
-import java.util.function.Consumer;
 import java.util.Arrays;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * A coefficient ramp: {@code active} values and per-sample {@code deltas},
@@ -78,16 +79,18 @@ public final class CoefRamp {
     }
 
     /**
-     * Apply {@code sampleStep} to the current active coefficients, then advance
-     * them one sample toward the target ({@code active[k] += delta[k]}). Call
-     * once per sample: the step does this sample's work with the live values
-     * before they move on.
+     * Apply {@code sampleStep} to the current active coefficients and return its
+     * result, then advance them one sample toward the target
+     * ({@code active[k] += delta[k]}). Call once per sample: the step does this
+     * sample's work with the live values before they move on, producing the
+     * sample's output.
      */
-    public void advance(Consumer<float[]> sampleStep) {
-        sampleStep.accept(active);
+    public <R> R advance(Function<float[], R> sampleStep) {
+        R result = sampleStep.apply(active);
         for (int k = 0; k < size; k++) {
             active[k] += deltas[k];
         }
+        return result;
     }
 
     /** Live active-value buffer, for tests that inspect the current coefficients. */

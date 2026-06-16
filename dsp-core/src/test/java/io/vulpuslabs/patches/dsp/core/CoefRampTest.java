@@ -10,7 +10,7 @@ class CoefRampTest {
 
     /** Advance one sample, ignoring the active values. */
     private static void step(CoefRamp r) {
-        r.advance(a -> { });
+        r.advance(a -> null);
     }
 
     @Test

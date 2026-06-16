@@ -16,15 +16,15 @@ final class SvfTestSupport {
         return 20.0 * Math.log10(ratio);
     }
 
-    /** Selects one of the three SVF outputs passed to an {@link SvfSink}. */
+    /** Selects one of the SVF outputs from a {@link FilterOutputs}. */
     @FunctionalInterface
     interface Mode {
-        float select(float lp, float hp, float bp);
+        float select(FilterOutputs o);
     }
 
-    static final Mode LP = (lp, hp, bp) -> lp;
-    static final Mode HP = (lp, hp, bp) -> hp;
-    static final Mode BP = (lp, hp, bp) -> bp;
+    static final Mode LP = FilterOutputs::lp;
+    static final Mode HP = FilterOutputs::hp;
+    static final Mode BP = FilterOutputs::bp;
 
     /**
      * Drive a sinusoid through {@code kernel} and return the steady-state peak
@@ -34,18 +34,16 @@ final class SvfTestSupport {
     static float measureSteadyStateAmplitude(SvfKernel kernel, float freqHz, Mode mode) {
         double omega = 2.0 * Math.PI * freqHz / SAMPLE_RATE;
         for (int i = 0; i < 4096; i++) {
-            kernel.tick((float) Math.sin(omega * i), (lp, hp, bp) -> { });
+            kernel.tick((float) Math.sin(omega * i));
         }
-        float[] peak = {0.0f};
+        float peak = 0.0f;
         for (int i = 4096; i < 5120; i++) {
-            kernel.tick((float) Math.sin(omega * i), (lp, hp, bp) -> {
-                float y = Math.abs(mode.select(lp, hp, bp));
-                if (y > peak[0]) {
-                    peak[0] = y;
-                }
-            });
+            float y = Math.abs(mode.select(kernel.tick((float) Math.sin(omega * i))));
+            if (y > peak) {
+                peak = y;
+            }
         }
-        return peak[0];
+        return peak;
     }
 
     /**
