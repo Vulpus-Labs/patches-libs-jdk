@@ -32,9 +32,7 @@ public class PolySvfBenchmark {
     private int voices;
 
     private float[][] input;
-    private float[] lp;
-    private float[] hp;
-    private float[] bp;
+    private PolyFilterOutputs out;
     private PolySvfKernel staticKernel;
     private PolySvfKernel rampKernel;
 
@@ -47,9 +45,7 @@ public class PolySvfBenchmark {
                 input[i][v] = (float) Math.sin(2.0 * Math.PI * (110.0 + 20.0 * v) / sr * i);
             }
         }
-        lp = new float[voices];
-        hp = new float[voices];
-        bp = new float[voices];
+        out = PolyFilterOutputs.create(voices);
 
         SvfCoeffs[] base = new SvfCoeffs[voices];
         SvfCoeffs[] target = new SvfCoeffs[voices];
@@ -67,10 +63,10 @@ public class PolySvfBenchmark {
     public void tickAllStatic(Blackhole bh) {
         PolySvfKernel k = staticKernel;
         for (int i = 0; i < blockSize; i++) {
-            k.tickAll(input[i], lp, hp, bp);
-            bh.consume(lp);
-            bh.consume(hp);
-            bh.consume(bp);
+            k.tickAll(input[i], out);
+            bh.consume(out.lp());
+            bh.consume(out.hp());
+            bh.consume(out.bp());
         }
     }
 
@@ -79,8 +75,8 @@ public class PolySvfBenchmark {
     public void tickAllRamp(Blackhole bh) {
         PolySvfKernel k = rampKernel;
         for (int i = 0; i < blockSize; i++) {
-            k.tickAll(input[i], lp, hp, bp);
-            bh.consume(lp);
+            k.tickAll(input[i], out);
+            bh.consume(out.lp());
         }
     }
 }

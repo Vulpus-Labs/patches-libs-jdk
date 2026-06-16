@@ -84,8 +84,8 @@ public final class PolySvfKernel {
      * the audio path allocates nothing. The recurrence is one flat loop over the
      * voices — the autovectorisation candidate.
      */
-    public void tickAll(float[] x, float[] lpOut, float[] hpOut, float[] bpOut) {
-        coefs.advance(active -> {
+    public PolyFilterOutputs tickAll(float[] x, PolyFilterOutputs outputs) {
+        return coefs.advance(active -> {
             int n = voices;
             for (int v = 0; v < n; v++) {
                 float f = active[v];
@@ -95,11 +95,9 @@ public final class PolySvfKernel {
                 float bp = bpState[v] + f * hp;
                 lpState[v] = lp;
                 bpState[v] = bp;
-                lpOut[v] = lp;
-                hpOut[v] = hp;
-                bpOut[v] = bp;
+                outputs.update(v, lp, hp, bp);
             }
-            return null;
+            return outputs;
         });
     }
 }

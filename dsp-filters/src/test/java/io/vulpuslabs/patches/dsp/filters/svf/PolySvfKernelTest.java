@@ -19,19 +19,17 @@ class PolySvfKernelTest {
         PolySvfKernel poly = new PolySvfKernel(fill(c));
 
         float[] x = new float[VOICES];
-        float[] lp = new float[VOICES];
-        float[] hp = new float[VOICES];
-        float[] bp = new float[VOICES];
+        PolyFilterOutputs out = newOutputs();
 
         for (int i = 0; i < 4096; i++) {
             float in = (float) Math.sin(2.0 * Math.PI * 220.0 / SAMPLE_RATE * i);
             java.util.Arrays.fill(x, in);
             FilterOutputs m = mono.tick(in);
-            poly.tickAll(x, lp, hp, bp);
+            poly.tickAll(x, out);
             for (int v = 0; v < VOICES; v++) {
-                assertEquals(m.lp(), lp[v], 1e-9f, "lp voice " + v + " @ " + i);
-                assertEquals(m.hp(), hp[v], 1e-9f, "hp voice " + v + " @ " + i);
-                assertEquals(m.bp(), bp[v], 1e-9f, "bp voice " + v + " @ " + i);
+                assertEquals(m.lp(), out.lp()[v], 1e-9f, "lp voice " + v + " @ " + i);
+                assertEquals(m.hp(), out.hp()[v], 1e-9f, "hp voice " + v + " @ " + i);
+                assertEquals(m.bp(), out.bp()[v], 1e-9f, "bp voice " + v + " @ " + i);
             }
         }
     }
@@ -45,38 +43,34 @@ class PolySvfKernelTest {
         PolySvfKernel poly = new PolySvfKernel(coeffs);
 
         float[] x = new float[VOICES];
-        float[] lp = new float[VOICES];
-        float[] hp = new float[VOICES];
-        float[] bp = new float[VOICES];
+        PolyFilterOutputs out = newOutputs();
         for (int i = 0; i < 256; i++) {
             java.util.Arrays.fill(x, i == 0 ? 1.0f : 0.0f);
-            poly.tickAll(x, lp, hp, bp);
+            poly.tickAll(x, out);
         }
         // Different cutoffs → different lowpass state by now.
-        assertNotEquals(lp[0], lp[VOICES - 1], "voices at different cutoffs should diverge");
+        assertNotEquals(out.lp()[0], out.lp()[VOICES - 1], "voices at different cutoffs should diverge");
     }
 
     @Test
     void resetZeroesAllVoices() {
         PolySvfKernel poly = new PolySvfKernel(fill(SvfCoeffs.of(1_000.0f, SAMPLE_RATE, 0.5f)));
         float[] x = new float[VOICES];
-        float[] lp = new float[VOICES];
-        float[] hp = new float[VOICES];
-        float[] bp = new float[VOICES];
+        PolyFilterOutputs out = newOutputs();
         for (int i = 0; i < 100; i++) {
             java.util.Arrays.fill(x, 0.5f);
-            poly.tickAll(x, lp, hp, bp);
+            poly.tickAll(x, out);
         }
         poly.resetState();
 
         // After reset, an impulse-free input gives lp = 0, hp = x, bp = f*x for every voice.
         float f = SvfCoeffs.of(1_000.0f, SAMPLE_RATE, 0.5f).f();
         java.util.Arrays.fill(x, 1.0f);
-        poly.tickAll(x, lp, hp, bp);
+        poly.tickAll(x, out);
         for (int v = 0; v < VOICES; v++) {
-            assertEquals(0.0f, lp[v], 1e-9f, "lp voice " + v);
-            assertEquals(1.0f, hp[v], 1e-9f, "hp voice " + v);
-            assertEquals(f, bp[v], 1e-9f, "bp voice " + v);
+            assertEquals(0.0f, out.lp()[v], 1e-9f, "lp voice " + v);
+            assertEquals(1.0f, out.hp()[v], 1e-9f, "hp voice " + v);
+            assertEquals(f, out.bp()[v], 1e-9f, "bp voice " + v);
         }
     }
 
@@ -98,9 +92,7 @@ class PolySvfKernelTest {
         int interval = 32;
         PolySvfKernel poly = new PolySvfKernel(base, interval);
         float[] x = new float[VOICES];
-        float[] lp = new float[VOICES];
-        float[] hp = new float[VOICES];
-        float[] bp = new float[VOICES];
+        PolyFilterOutputs out = newOutputs();
 
         for (int n = 0; n < 10_000; n++) {
             if (n % interval == 0) {
@@ -112,9 +104,9 @@ class PolySvfKernelTest {
                 poly.beginRamp(tgt);
             }
             java.util.Arrays.fill(x, n < 64 ? 0.5f : 0.0f);
-            poly.tickAll(x, lp, hp, bp);
+            poly.tickAll(x, out);
             for (int v = 0; v < VOICES; v++) {
-                assertTrue(Float.isFinite(lp[v]) && Float.isFinite(hp[v]) && Float.isFinite(bp[v]),
+                assertTrue(Float.isFinite(out.lp()[v]) && Float.isFinite(out.hp()[v]) && Float.isFinite(out.bp()[v]),
                         "voice " + v + " @ " + n + ": NaN/Inf");
             }
         }
@@ -123,16 +115,18 @@ class PolySvfKernelTest {
     private static float[] runBlock() {
         PolySvfKernel poly = new PolySvfKernel(fill(SvfCoeffs.of(800.0f, SAMPLE_RATE, 0.4f)));
         float[] x = new float[VOICES];
-        float[] lp = new float[VOICES];
-        float[] hp = new float[VOICES];
-        float[] bp = new float[VOICES];
-        float[] out = new float[256];
-        for (int i = 0; i < out.length; i++) {
+        PolyFilterOutputs out = newOutputs();
+        float[] result = new float[256];
+        for (int i = 0; i < result.length; i++) {
             java.util.Arrays.fill(x, (float) Math.sin(2.0 * Math.PI * 440.0 / SAMPLE_RATE * i));
-            poly.tickAll(x, lp, hp, bp);
-            out[i] = lp[0];
+            poly.tickAll(x, out);
+            result[i] = out.lp()[0];
         }
-        return out;
+        return result;
+    }
+
+    private static PolyFilterOutputs newOutputs() {
+        return PolyFilterOutputs.create(VOICES);
     }
 
     private static SvfCoeffs[] fill(SvfCoeffs c) {
