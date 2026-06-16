@@ -78,28 +78,20 @@ public final class CoefRamp {
     }
 
     /**
-     * {@code active[k] += delta[k]} for all k. Call once per sample after the
-     * kernel's recurrence step. Returns the (now-advanced) active buffer.
+     * Apply {@code sampleStep} to the current active coefficients, then advance
+     * them one sample toward the target ({@code active[k] += delta[k]}). Call
+     * once per sample: the step does this sample's work with the live values
+     * before they move on.
      */
-    public float[] advance() {
+    public void advance(Consumer<float[]> sampleStep) {
+        sampleStep.accept(active);
         for (int k = 0; k < size; k++) {
             active[k] += deltas[k];
         }
-        return active;
     }
 
-    /** Live active-value buffer; read the current coefficients before {@link #advance()}. */
+    /** Live active-value buffer, for tests that inspect the current coefficients. */
     public float[] active() {
         return active;
-    }
-
-    /** Live per-sample delta buffer. */
-    public float[] deltas() {
-        return deltas;
-    }
-
-    /** Live target buffer, last committed at a {@link #beginRamp}/{@link #setStatic} boundary. */
-    public float[] targets() {
-        return targets;
     }
 }

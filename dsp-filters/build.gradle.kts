@@ -19,4 +19,7 @@ jmh {
     iterations.set(5)
     fork.set(2)
     benchmarkMode.set(listOf("thrpt"))
+    // gc profiler reports gc.alloc.rate.norm — bytes allocated per op. ~0 means
+    // escape analysis scalar-replaced the per-sample callback closures.
+    profilers.add("gc")
 }

@@ -34,16 +34,18 @@ class SvfGoldenParityTest {
     void impulseScenarioMatchesRust() {
         Scenario s = load("impulse_fc1000_q0.5");
         // Coefficient port parity: Java's svf_f / q_to_damp reproduce Rust's.
-        assertTrue(Math.abs(Svf.svfF(1_000.0f, SR) - s.f) < COEFF_TOL, "svf_f mismatch");
-        assertTrue(Math.abs(Svf.qToDamp(0.5f) - s.d) < COEFF_TOL, "q_to_damp mismatch");
+        SvfCoeffs c = SvfCoeffs.of(1_000.0f, SR, 0.5f);
+        assertTrue(Math.abs(c.f() - s.f) < COEFF_TOL, "svf_f mismatch");
+        assertTrue(Math.abs(c.qDamp() - s.d) < COEFF_TOL, "q_to_damp mismatch");
         replayStatic(s);
     }
 
     @Test
     void sineScenarioMatchesRust() {
         Scenario s = load("sine220_fc800_q0.7");
-        assertTrue(Math.abs(Svf.svfF(800.0f, SR) - s.f) < COEFF_TOL, "svf_f mismatch");
-        assertTrue(Math.abs(Svf.qToDamp(0.7f) - s.d) < COEFF_TOL, "q_to_damp mismatch");
+        SvfCoeffs c = SvfCoeffs.of(800.0f, SR, 0.7f);
+        assertTrue(Math.abs(c.f() - s.f) < COEFF_TOL, "svf_f mismatch");
+        assertTrue(Math.abs(c.qDamp() - s.d) < COEFF_TOL, "q_to_damp mismatch");
         replayStatic(s);
     }
 
@@ -51,39 +53,39 @@ class SvfGoldenParityTest {
     void rampedSweepMatchesRust() {
         Scenario s = load("ramped_sweep_q0.6");
         // Reproduce the exact driving schedule used to dump the golden vector.
-        float d = s.d;
+        float qNorm = 0.6f;
         float c0 = 16.351_599f;
         float baseVoct = 5.0f;
         int interval = 32;
-        float f0 = Svf.svfF(DspMath.clamp((float) (c0 * Math.pow(2.0, baseVoct)), 1.0f, SR * 0.499f), SR);
-        SvfKernel k = new SvfKernel(f0, d, interval);
+        float baseFc = DspMath.clamp((float) (c0 * Math.pow(2.0, baseVoct)), 1.0f, SR * 0.499f);
+        SvfKernel k = new SvfKernel(SvfCoeffs.of(baseFc, SR, qNorm), interval);
         int total = s.x.length;
         for (int n = 0; n < total; n++) {
             if (n % interval == 0) {
                 float env = ((float) n / total) * 3.0f;
                 float fc = DspMath.clamp((float) (c0 * Math.pow(2.0, baseVoct + env)), 1.0f, SR * 0.499f);
-                k.beginRamp(Svf.svfF(fc, SR), d);
+                k.beginRamp(SvfCoeffs.of(fc, SR, qNorm));
             }
-            k.tick(s.x[n]);
-            assertClose(s, n, k);
+            final int idx = n;
+            k.tick(s.x[n], (lp, hp, bp) -> assertClose(s, idx, lp, hp, bp));
         }
     }
 
     private void replayStatic(Scenario s) {
-        SvfKernel k = new SvfKernel(s.f, s.d);
+        SvfKernel k = new SvfKernel(new SvfCoeffs(s.f, s.d));
         for (int n = 0; n < s.x.length; n++) {
-            k.tick(s.x[n]);
-            assertClose(s, n, k);
+            final int idx = n;
+            k.tick(s.x[n], (lp, hp, bp) -> assertClose(s, idx, lp, hp, bp));
         }
     }
 
-    private void assertClose(Scenario s, int n, SvfKernel k) {
-        assertTrue(Math.abs(k.lpOut - s.lp[n]) < TOL,
-                s.name + " lp[" + n + "]: " + k.lpOut + " vs " + s.lp[n]);
-        assertTrue(Math.abs(k.hpOut - s.hp[n]) < TOL,
-                s.name + " hp[" + n + "]: " + k.hpOut + " vs " + s.hp[n]);
-        assertTrue(Math.abs(k.bpOut - s.bp[n]) < TOL,
-                s.name + " bp[" + n + "]: " + k.bpOut + " vs " + s.bp[n]);
+    private void assertClose(Scenario s, int n, float lp, float hp, float bp) {
+        assertTrue(Math.abs(lp - s.lp[n]) < TOL,
+                s.name + " lp[" + n + "]: " + lp + " vs " + s.lp[n]);
+        assertTrue(Math.abs(hp - s.hp[n]) < TOL,
+                s.name + " hp[" + n + "]: " + hp + " vs " + s.hp[n]);
+        assertTrue(Math.abs(bp - s.bp[n]) < TOL,
+                s.name + " bp[" + n + "]: " + bp + " vs " + s.bp[n]);
     }
 
     // ── Minimal golden-JSON loader ────────────────────────────────────────

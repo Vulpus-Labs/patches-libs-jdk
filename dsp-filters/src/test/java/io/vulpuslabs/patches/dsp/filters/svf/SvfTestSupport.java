@@ -1,7 +1,5 @@
 package io.vulpuslabs.patches.dsp.filters.svf;
 
-import java.util.function.ToDoubleFunction;
-
 /** Shared fixtures and helpers for the SVF tests. Mirrors the Rust test module's helpers. */
 final class SvfTestSupport {
 
@@ -11,20 +9,22 @@ final class SvfTestSupport {
     }
 
     static SvfKernel makeKernel(float cutoffHz, float qNorm) {
-        return new SvfKernel(Svf.svfF(cutoffHz, SAMPLE_RATE), Svf.qToDamp(qNorm));
+        return new SvfKernel(SvfCoeffs.of(cutoffHz, SAMPLE_RATE, qNorm));
     }
 
     static double db(double ratio) {
         return 20.0 * Math.log10(ratio);
     }
 
-    /** Output selector over the three SVF modes of a kernel after a {@code tick}. */
-    interface Mode extends ToDoubleFunction<SvfKernel> {
+    /** Selects one of the three SVF outputs passed to an {@link SvfSink}. */
+    @FunctionalInterface
+    interface Mode {
+        float select(float lp, float hp, float bp);
     }
 
-    static final Mode LP = k -> k.lpOut;
-    static final Mode HP = k -> k.hpOut;
-    static final Mode BP = k -> k.bpOut;
+    static final Mode LP = (lp, hp, bp) -> lp;
+    static final Mode HP = (lp, hp, bp) -> hp;
+    static final Mode BP = (lp, hp, bp) -> bp;
 
     /**
      * Drive a sinusoid through {@code kernel} and return the steady-state peak
@@ -34,18 +34,18 @@ final class SvfTestSupport {
     static float measureSteadyStateAmplitude(SvfKernel kernel, float freqHz, Mode mode) {
         double omega = 2.0 * Math.PI * freqHz / SAMPLE_RATE;
         for (int i = 0; i < 4096; i++) {
-            kernel.tick((float) Math.sin(omega * i));
-            mode.applyAsDouble(kernel);
+            kernel.tick((float) Math.sin(omega * i), (lp, hp, bp) -> { });
         }
-        float peak = 0.0f;
+        float[] peak = {0.0f};
         for (int i = 4096; i < 5120; i++) {
-            kernel.tick((float) Math.sin(omega * i));
-            float y = (float) mode.applyAsDouble(kernel);
-            if (Math.abs(y) > peak) {
-                peak = Math.abs(y);
-            }
+            kernel.tick((float) Math.sin(omega * i), (lp, hp, bp) -> {
+                float y = Math.abs(mode.select(lp, hp, bp));
+                if (y > peak[0]) {
+                    peak[0] = y;
+                }
+            });
         }
-        return peak;
+        return peak[0];
     }
 
     /**

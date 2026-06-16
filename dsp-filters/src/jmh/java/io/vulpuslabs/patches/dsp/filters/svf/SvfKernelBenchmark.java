@@ -30,6 +30,16 @@ public class SvfKernelBenchmark {
     private SvfKernel staticKernel;
     private SvfKernel rampKernel;
 
+    // Output accumulators. The sinks (created once in setup, capturing `this`)
+    // sum every sample's outputs here so nothing is dead-code-eliminated, while
+    // the per-op path itself allocates nothing — letting gc.alloc.rate.norm
+    // isolate any per-sample closure allocation in the kernel.
+    private float lpAcc;
+    private float hpAcc;
+    private float bpAcc;
+    private SvfSink sumAllSink;
+    private SvfSink sumLpSink;
+
     @Setup(Level.Trial)
     public void setup() {
         final float sr = 48_000.0f;
@@ -37,31 +47,41 @@ public class SvfKernelBenchmark {
         for (int i = 0; i < blockSize; i++) {
             input[i] = (float) Math.sin(2.0 * Math.PI * 220.0 / sr * i);
         }
-        staticKernel = new SvfKernel(Svf.svfF(1_000.0f, sr), Svf.qToDamp(0.5f));
-        rampKernel = new SvfKernel(Svf.svfF(1_000.0f, sr), Svf.qToDamp(0.5f), blockSize);
+        staticKernel = new SvfKernel(SvfCoeffs.of(1_000.0f, sr, 0.5f));
+        rampKernel = new SvfKernel(SvfCoeffs.of(1_000.0f, sr, 0.5f), blockSize);
         // Prime a non-zero ramp so the advance step does real work each sample.
-        rampKernel.beginRamp(Svf.svfF(4_000.0f, sr), Svf.qToDamp(0.5f));
+        rampKernel.beginRamp(SvfCoeffs.of(4_000.0f, sr, 0.5f));
+        sumAllSink = (lp, hp, bp) -> {
+            lpAcc += lp;
+            hpAcc += hp;
+            bpAcc += bp;
+        };
+        sumLpSink = (lp, hp, bp) -> lpAcc += lp;
     }
 
     /** One block of samples through the static-coefficient path. */
     @Benchmark
     public void tickStaticBlock(Blackhole bh) {
         SvfKernel k = staticKernel;
+        lpAcc = 0.0f;
+        hpAcc = 0.0f;
+        bpAcc = 0.0f;
         for (int i = 0; i < input.length; i++) {
-            k.tick(input[i]);
-            bh.consume(k.lpOut);
-            bh.consume(k.hpOut);
-            bh.consume(k.bpOut);
+            k.tick(input[i], sumAllSink);
         }
+        bh.consume(lpAcc);
+        bh.consume(hpAcc);
+        bh.consume(bpAcc);
     }
 
     /** One block of samples through the per-sample coefficient-ramp path. */
     @Benchmark
     public void tickRampBlock(Blackhole bh) {
         SvfKernel k = rampKernel;
+        lpAcc = 0.0f;
         for (int i = 0; i < input.length; i++) {
-            k.tick(input[i]);
-            bh.consume(k.lpOut);
+            k.tick(input[i], sumLpSink);
         }
+        bh.consume(lpAcc);
     }
 }

@@ -6,6 +6,10 @@ public final class DspMath {
     private DspMath() {
     }
 
+    /** {@code f32}-precision &pi;, matching Rust's {@code std::f32::consts::PI}. */
+    public static final float FLOAT_PI = (float) Math.PI;
+
+
     /**
      * Replace NaN / &plusmn;Inf with {@code 0.0f} so a single bad sample cannot
      * permanently corrupt recursive integrator state.

@@ -33,8 +33,9 @@ class SvfFrequencyResponseTest {
     @Test
     void t2BandpassPeak() {
         float fc = 1_000.0f;
-        float d = Svf.qToDamp(0.5f);
-        SvfKernel kernel = new SvfKernel(Svf.svfF(fc, SAMPLE_RATE), d);
+        SvfCoeffs c = SvfCoeffs.of(fc, SAMPLE_RATE, 0.5f);
+        float d = c.qDamp();
+        SvfKernel kernel = new SvfKernel(c);
         float amp = measureSteadyStateAmplitude(kernel, fc, BP);
         double theoretical = 1.0 / d;
         double dbErr = Math.abs(db(amp / theoretical));
@@ -47,8 +48,8 @@ class SvfFrequencyResponseTest {
         int fftSize = 1024;
         float[] ir = new float[fftSize];
         for (int i = 0; i < fftSize; i++) {
-            kernel.tick(i == 0 ? 1.0f : 0.0f);
-            ir[i] = kernel.lpOut;
+            final int bin = i;
+            kernel.tick(i == 0 ? 1.0f : 0.0f, (lp, hp, bp) -> ir[bin] = lp);
         }
         double[] resp = magnitudeResponseDb(ir, fftSize);
 
@@ -68,8 +69,8 @@ class SvfFrequencyResponseTest {
         int fftSize = 1024;
         float[] ir = new float[fftSize];
         for (int i = 0; i < fftSize; i++) {
-            kernel.tick(i == 0 ? 1.0f : 0.0f);
-            ir[i] = kernel.hpOut;
+            final int bin = i;
+            kernel.tick(i == 0 ? 1.0f : 0.0f, (lp, hp, bp) -> ir[bin] = hp);
         }
         double[] resp = magnitudeResponseDb(ir, fftSize);
 
@@ -89,8 +90,8 @@ class SvfFrequencyResponseTest {
         int fftSize = 1024;
         float[] ir = new float[fftSize];
         for (int i = 0; i < fftSize; i++) {
-            kernel.tick(i == 0 ? 1.0f : 0.0f);
-            ir[i] = kernel.bpOut;
+            final int bin = i;
+            kernel.tick(i == 0 ? 1.0f : 0.0f, (lp, hp, bp) -> ir[bin] = bp);
         }
         double[] resp = magnitudeResponseDb(ir, fftSize);
 

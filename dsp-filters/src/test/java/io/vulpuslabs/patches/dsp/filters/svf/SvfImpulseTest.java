@@ -12,9 +12,10 @@ class SvfImpulseTest {
     void t1ImpulseResponseLowpass() {
         float fc = 1_000.0f;
         float qNorm = 0.5f;
-        float f = Svf.svfF(fc, SAMPLE_RATE);
-        float d = Svf.qToDamp(qNorm);
-        SvfKernel kernel = new SvfKernel(f, d);
+        SvfCoeffs c = SvfCoeffs.of(fc, SAMPLE_RATE, qNorm);
+        float f = c.f();
+        float d = c.qDamp();
+        SvfKernel kernel = new SvfKernel(c);
 
         float refLp = 0.0f;
         float refBp = 0.0f;
@@ -26,9 +27,10 @@ class SvfImpulseTest {
             refLp = refLpNew;
             refBp = refBpNew;
 
-            kernel.tick(x);
-            assertTrue(Math.abs(kernel.lpOut - refLp) < 1e-9f,
-                    "sample " + i + ": lp=" + kernel.lpOut + " ref=" + refLp);
+            final float expected = refLp;
+            final int idx = i;
+            kernel.tick(x, (lp, hp, bp) -> assertTrue(Math.abs(lp - expected) < 1e-9f,
+                    "sample " + idx + ": lp=" + lp + " ref=" + expected));
         }
     }
 }

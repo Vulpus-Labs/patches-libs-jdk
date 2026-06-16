@@ -14,15 +14,12 @@ class SvfStabilityTest {
     @Test
     void t4StabilityHighResonance() {
         float qNorm = 0.83f; // damping ≈ 0.1, Q ≈ 10
-        float f = Svf.svfF(1_000.0f, SAMPLE_RATE);
-        float d = Svf.qToDamp(qNorm);
-        SvfKernel kernel = new SvfKernel(f, d);
+        SvfKernel kernel = new SvfKernel(SvfCoeffs.of(1_000.0f, SAMPLE_RATE, qNorm));
         for (int i = 0; i < 10_000; i++) {
-            kernel.tick(i == 0 ? 1.0f : 0.0f);
-            assertTrue(Math.abs(kernel.lpOut) < 100.0f
-                            && Math.abs(kernel.hpOut) < 100.0f
-                            && Math.abs(kernel.bpOut) < 100.0f,
-                    "sample " + i + ": unbounded lp=" + kernel.lpOut + " hp=" + kernel.hpOut + " bp=" + kernel.bpOut);
+            final int idx = i;
+            kernel.tick(i == 0 ? 1.0f : 0.0f, (lp, hp, bp) ->
+                    assertTrue(Math.abs(lp) < 100.0f && Math.abs(hp) < 100.0f && Math.abs(bp) < 100.0f,
+                            "sample " + idx + ": unbounded lp=" + lp + " hp=" + hp + " bp=" + bp));
         }
     }
 
@@ -31,10 +28,9 @@ class SvfStabilityTest {
         float qNorm = 0.95f;
         float baseCutoffVoct = 6.0f;
         float c0 = 16.351_599f;
-        float d = Svf.qToDamp(qNorm);
         float baseFc = DspMath.clamp((float) (c0 * Math.pow(2.0, baseCutoffVoct)), 1.0f, SAMPLE_RATE * 0.499f);
         int interval = 32;
-        SvfKernel kernel = new SvfKernel(Svf.svfF(baseFc, SAMPLE_RATE), d, interval);
+        SvfKernel kernel = new SvfKernel(SvfCoeffs.of(baseFc, SAMPLE_RATE, qNorm), interval);
 
         int total = 10_000;
         int attackSamples = 1536;
@@ -45,33 +41,38 @@ class SvfStabilityTest {
                 float fc = DspMath.clamp(
                         (float) (c0 * Math.pow(2.0, baseCutoffVoct + env * 4.0f)),
                         1.0f, SAMPLE_RATE * 0.499f);
-                kernel.beginRamp(Svf.svfF(fc, SAMPLE_RATE), d);
+                kernel.beginRamp(SvfCoeffs.of(fc, SAMPLE_RATE, qNorm));
             }
             float x = (n < 64) ? 0.5f : 0.0f;
-            kernel.tick(x);
-            assertTrue(Float.isFinite(kernel.lpOut) && Float.isFinite(kernel.hpOut) && Float.isFinite(kernel.bpOut),
-                    "sample " + n + ": NaN/Inf");
-            assertTrue(Math.abs(kernel.lpOut) < 1e6f && Math.abs(kernel.hpOut) < 1e6f && Math.abs(kernel.bpOut) < 1e6f,
-                    "sample " + n + ": runaway");
+            final int idx = n;
+            kernel.tick(x, (lp, hp, bp) -> {
+                assertTrue(Float.isFinite(lp) && Float.isFinite(hp) && Float.isFinite(bp),
+                        "sample " + idx + ": NaN/Inf");
+                assertTrue(Math.abs(lp) < 1e6f && Math.abs(hp) < 1e6f && Math.abs(bp) < 1e6f,
+                        "sample " + idx + ": runaway");
+            });
         }
     }
 
     @Test
     void stateResetZeroesOutputs() {
-        float f = Svf.svfF(1_000.0f, SAMPLE_RATE);
-        float d = Svf.qToDamp(0.5f);
-        SvfKernel kernel = new SvfKernel(f, d);
+        SvfCoeffs c = SvfCoeffs.of(1_000.0f, SAMPLE_RATE, 0.5f);
+        float f = c.f();
+        SvfKernel kernel = new SvfKernel(c);
+        float[] lastLp = {0.0f};
         for (int i = 0; i < 100; i++) {
-            kernel.tick(0.5f);
+            kernel.tick(0.5f, (lp, hp, bp) -> lastLp[0] = lp);
         }
-        assertNotEquals(0.0f, kernel.lpState);
+        // State accumulated under DC drive, so the output is non-zero.
+        assertNotEquals(0.0f, lastLp[0]);
         kernel.resetState();
 
         // After reset: lp = 0 + f*0 = 0; hp = x - 0 - d*0 = x; bp = 0 + f*x.
         float x = 1.0f;
-        kernel.tick(x);
-        assertEquals(0.0f, kernel.lpOut, 1e-9f);
-        assertEquals(x, kernel.hpOut, 1e-9f);
-        assertEquals(f * x, kernel.bpOut, 1e-9f);
+        kernel.tick(x, (lp, hp, bp) -> {
+            assertEquals(0.0f, lp, 1e-9f);
+            assertEquals(x, hp, 1e-9f);
+            assertEquals(f * x, bp, 1e-9f);
+        });
     }
 }
